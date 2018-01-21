@@ -9,6 +9,7 @@ import (
 	"github.com/justwatchcom/gopass/store"
 
 	yaml "gopkg.in/yaml.v2"
+	"bufio"
 )
 
 // Secret is a decoded secret
@@ -38,10 +39,12 @@ func Parse(buf []byte) (*Secret, error) {
 	if len(lines) > 1 {
 		s.body = string(bytes.TrimSpace(lines[1]))
 	}
-	if _, err := s.decodeYAML(); err != nil {
+	if parsed, err := s.decodeYAML(); parsed && err == nil {
+		return s, nil
+	} else {
+		s.decodeLegacyBody()
 		return s, err
 	}
-	return s, nil
 }
 
 // decodeYAML attempts to decode an optional YAML part of a secret
@@ -71,6 +74,20 @@ func (s *Secret) encodeYAML() (err error) {
 	}
 	s.body = "---\n" + string(yb)
 	return err
+}
+
+func (s *Secret) decodeLegacyBody() () {
+	scanner := bufio.NewScanner(strings.NewReader(s.body))
+	d := make(map[string]interface{})
+	for scanner.Scan() {
+		result := strings.SplitN(scanner.Text(), ":", 2)
+		if len(result) == 2 {
+			d[strings.TrimSpace(result[0])] = strings.TrimSpace(result[1])
+		}
+	}
+	if len(d) > 0 {
+		s.data = d
+	}
 }
 
 // Bytes encodes an secret
